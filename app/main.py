@@ -1,36 +1,39 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
 from app.config import settings
+from app.database import engine, Base
+from app.api.endpoints import router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Bu fonksiyon, uygulama başladığında ve kapandığında çalışacak kodları yönetir.
-    Örneğin, veritabanı bağlantılarını açmak ve kapamak için ideal bir yerdir.
-    """
-    print(f"🚀 {settings.PROJECT_NAME} uygulaması başlatılıyor...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
-    print("🛑 Uygulama kapatılıyor...")
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
+    description="Syntra — AI destekli KOBİ operasyon yönetim platformu.",
+    version="1.0.0",
     lifespan=lifespan,
     debug=settings.DEBUG,
 )
 
+origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
-app.get("/health", tags=["System"])
+app.include_router(router, prefix="/api")
+
+
+@app.get("/health", tags=["System"])
 async def health_check():
-    """
-    Bu basit endpoint, Docker'ın uygulamamızın 'canlı' olup olmadığını
-    kontrol etmesi için kullanılır. Sistemin sağlığını kontrol eder.
-    """
-    return {"status": "ok", "app_name": settings.PROJECT_NAME}
+    return {"status": "ok", "app": settings.PROJECT_NAME}
