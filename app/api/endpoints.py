@@ -22,6 +22,7 @@ ALLOWED_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.shee
 
 @router.get("/products", response_model=List[ProductRead], tags=["Products"])
 async def list_products(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
+    limit = min(limit, 100)
     result = await db.execute(select(Product).offset(skip).limit(limit))
     return result.scalars().all()
 
@@ -111,8 +112,8 @@ async def upload_products(file: UploadFile = File(...), db: AsyncSession = Depen
                     supplier_email=row.get("supplier_email"),
                 ))
                 added += 1
-        except Exception as e:
-            errors.append({"satir": int(idx) + 2, "hata": str(e)})
+        except Exception:
+            errors.append({"satir": int(idx) + 2, "hata": "Bu satır işlenemedi, veriyi kontrol edin."})
 
     return {"eklenen": added, "guncellenen": updated, "hatalar": errors}
 
@@ -162,7 +163,9 @@ async def ai_stock_alerts(db: AsyncSession = Depends(get_db)):
     try:
         from app.services.ai_service import ai_service
         ai_analizi = await ai_service.analyze_stock_alerts(critical)
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("AI stok analizi hatası: %s", e)
         ai_analizi = "AI analizi şu an kullanılamıyor."
 
     return {
@@ -190,7 +193,9 @@ async def supplier_draft(product_id: int, quantity: int = 50, db: AsyncSession =
         taslak = await ai_service.generate_stock_alert_email(
             product.name, product.stock_quantity, product.supplier_email or "belirtilmemiş"
         )
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("Tedarikçi maili üretilemedi: %s", e)
         taslak = (
             f"Sayın Yetkili,\n\n'{product.name}' ürününde stok kritik seviyeye düştü "
             f"(mevcut: {product.stock_quantity} adet). {quantity} adet sipariş talebi iletiyoruz.\n\nSyntra"
