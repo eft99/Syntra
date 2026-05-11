@@ -1,6 +1,6 @@
 import logging
-from fastapi import APIRouter, Depends, status
-from sqlalchemy import delete
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -23,7 +23,6 @@ ORNEK_URUNLER = [
 async def seed_demo_data(db: AsyncSession = Depends(get_db)):
     eklenen = 0
     for veri in ORNEK_URUNLER:
-        from sqlalchemy import select
         mevcut = (await db.execute(select(Product).where(Product.sku == veri["sku"]))).scalar_one_or_none()
         if not mevcut:
             db.add(Product(**veri))
@@ -40,7 +39,15 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)):
 
 
 @router.delete("/reset", status_code=status.HTTP_200_OK)
-async def reset_demo_data(db: AsyncSession = Depends(get_db)):
+async def reset_demo_data(
+    onayla: str = Query(..., description="Silme işlemini onaylamak için 'evet' yazın."),
+    db: AsyncSession = Depends(get_db),
+):
+    if onayla.strip().lower() != "evet":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Silme işlemi onaylanmadı. Devam etmek için 'onayla=evet' gönderin.",
+        )
     await db.execute(delete(OrderItem))
     await db.execute(delete(Order))
     await db.execute(delete(Product))
@@ -53,9 +60,8 @@ async def reset_demo_data(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/status")
+@router.get("/status", tags=["Demo"])
 async def demo_status(db: AsyncSession = Depends(get_db)):
-    from sqlalchemy import select, func
     urun_sayisi = (await db.execute(select(func.count()).select_from(Product))).scalar()
     siparis_sayisi = (await db.execute(select(func.count()).select_from(Order))).scalar()
     kritik_sayisi = (await db.execute(

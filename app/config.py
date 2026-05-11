@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str
     PROJECT_NAME: str = "Syntra"
     DEBUG: bool = False
-    ALLOWED_ORIGINS: str = "*"
+    ALLOWED_ORIGINS: str = "http://localhost:3000"
 
     @field_validator("GEMINI_API_KEY")
     @classmethod

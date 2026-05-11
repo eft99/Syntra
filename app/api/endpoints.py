@@ -79,7 +79,7 @@ async def download_template():
 
 @router.post("/upload-products", tags=["Excel"])
 async def upload_products(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
-    if not file.filename.endswith(".xlsx") or file.content_type != ALLOWED_MIME:
+    if not file.filename or not file.filename.endswith(".xlsx") or file.content_type != ALLOWED_MIME:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Sadece .xlsx dosyaları kabul edilir.")
 
     content = await file.read()
