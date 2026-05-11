@@ -36,4 +36,4 @@ app.include_router(router, prefix="/api")
 
 @app.get("/health", tags=["System"])
 async def health_check():
-    return {"status": "ok", "app": settings.PROJECT_NAME}
+    return {"durum": "basarili", "uygulama": settings.PROJECT_NAME}

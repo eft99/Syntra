@@ -17,9 +17,6 @@ router = APIRouter()
 
 ALLOWED_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-
-# ── Products ─────────────────────────────────
-
 @router.get("/products", response_model=List[ProductRead], tags=["Products"])
 async def list_products(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
     limit = min(limit, 100)
@@ -47,9 +44,6 @@ async def create_product(data: ProductCreate, db: AsyncSession = Depends(get_db)
     await db.refresh(product)
     return product
 
-
-# ── Excel ────────────────────────────────────
-
 @router.get("/download-template", tags=["Excel"])
 async def download_template():
     df = pd.DataFrame([
@@ -69,18 +63,15 @@ async def download_template():
 
 @router.post("/upload-products", tags=["Excel"])
 async def upload_products(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
-    if not file.filename.endswith((".xlsx", ".xls")) or file.content_type not in (
-        ALLOWED_MIME,
-        "application/vnd.ms-excel",
-    ):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Sadece .xlsx veya .xls dosyaları kabul edilir.")
+    if not file.filename.endswith(".xlsx") or file.content_type != ALLOWED_MIME:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Sadece .xlsx dosyaları kabul edilir.")
 
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Dosya boyutu 5MB'ı geçemez.")
 
     try:
-        df = pd.read_excel(io.BytesIO(content))
+        df = pd.read_excel(io.BytesIO(content), engine="openpyxl")
     except Exception:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Excel dosyası okunamadı.")
 
@@ -117,9 +108,6 @@ async def upload_products(file: UploadFile = File(...), db: AsyncSession = Depen
 
     return {"eklenen": added, "guncellenen": updated, "hatalar": errors}
 
-
-# ── Orders ───────────────────────────────────
-
 @router.get("/orders", response_model=List[OrderRead], tags=["Orders"])
 async def list_orders(status_filter: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     query = select(Order).options(selectinload(Order.items))
@@ -148,9 +136,6 @@ async def create_order(data: OrderCreate, db: AsyncSession = Depends(get_db)):
     await db.flush()
     result = await db.execute(select(Order).options(selectinload(Order.items)).where(Order.id == order.id))
     return result.scalar_one()
-
-
-# ── AI ───────────────────────────────────────
 
 @router.get("/ai/stock-alerts", tags=["AI"])
 async def ai_stock_alerts(db: AsyncSession = Depends(get_db)):
@@ -203,9 +188,6 @@ async def supplier_draft(product_id: int, quantity: int = 50, db: AsyncSession =
 
     return {"urun_id": product.id, "tedarikci_email": product.supplier_email, "miktar": quantity, "taslak": taslak}
 
-
-# ── Notifications ─────────────────────────────
-
 VALID_CHANNELS = {"system", "email", "whatsapp", "telegram"}
 
 
@@ -218,9 +200,6 @@ async def send_notification(
     from app.services.notification_service import dispatch
     await dispatch(channel=channel, title=title, message=message)
     return {"durum": "gonderildi", "kanal": channel, "baslik": title}
-
-
-# ── Operations ───────────────────────────────
 
 @router.get("/operations/summary", tags=["Operations"])
 async def operations_summary(db: AsyncSession = Depends(get_db)):
