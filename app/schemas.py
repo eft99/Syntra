@@ -1,62 +1,89 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
+from pydantic import BaseModel, Field, EmailStr, field_validator
+import re
 
-# --- ÜRÜN ŞEMALARI ---
 
 class ProductBase(BaseModel):
-    """Bir ürünün temel alanlarını tanımlayan şema."""
-    sku: str = Field(..., description="Benzersiz Ürün Kodu", example="SABUN-001")
-    name: str = Field(..., description="Ürünün tam adı", example="Organik Lavanta Sabunu")
-    stock_quantity: int = Field(ge=0, description="Stok miktarı, 0'dan küçük olamaz.")
-    critical_limit: int = Field(default=10, description="AI uyarısı için kritik stok seviyesi.")
-    price: float = Field(default=0.0, description="Birim fiyat (TL)")
-    category: Optional[str] = Field(None, description="Ürün kategorisi")
-    supplier_email: Optional[str] = Field(None, description="Tedarikçinin e-posta adresi.")
+    sku: str = Field(..., min_length=2, max_length=50, example="SABUN-001")
+    name: str = Field(..., min_length=2, max_length=200, example="Organik Lavanta Sabunu")
+    stock_quantity: int = Field(ge=0)
+    critical_limit: int = Field(default=10, ge=0)
+    supplier_email: Optional[EmailStr] = None
+
+    @field_validator("sku")
+    @classmethod
+    def sku_gecerli_olmali(cls, v: str) -> str:
+        v = v.strip().upper()
+        if not re.match(r"^[A-Z0-9\-]{2,50}$", v):
+            raise ValueError("SKU yalnızca büyük harf, rakam ve tire içerebilir.")
+        return v
+
+    @field_validator("name")
+    @classmethod
+    def urun_adi_temizle(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 2:
+            raise ValueError("Ürün adı en az 2 karakter olmalıdır.")
+        return v
+
 
 class ProductCreate(ProductBase):
-    """Yeni bir ürün oluştururken kullanılacak şema. Temel alanları miras alır."""
     pass
 
+
 class ProductRead(ProductBase):
-    """Veritabanından bir ürün okunduğunda kullanıcıya gösterilecek şema."""
     id: int
-    created_at: datetime
-    updated_at: datetime
+    model_config = {"from_attributes": True}
 
-    class Config:
-        # Bu ayar, SQLAlchemy model nesnelerini otomatik olarak
-        # Pydantic şemasına dönüştürmemizi sağlar.
-        from_attributes = True
-
-# --- SİPARİŞ ÖĞESİ (ORDER ITEM) ŞEMALARI ---
 
 class OrderItemBase(BaseModel):
-    """Bir siparişin içindeki tek bir ürün kaleminin temel şeması."""
-    product_id: int
-    quantity: int = Field(gt=0, description="Miktar 0'dan büyük olmalı.")
+    product_id: int = Field(gt=0)
+    quantity: int = Field(gt=0, le=10000)
+
 
 class OrderItemRead(OrderItemBase):
-    """Okuma işlemi için sipariş kalemi şeması."""
     id: int
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
-# --- SİPARİŞ ŞEMALARI ---
 
 class OrderCreate(BaseModel):
-    """Yeni bir sipariş oluşturmak için gereken verileri tanımlayan şema."""
-    customer_name: str
-    items: List[OrderItemBase] # Siparişin içinde birden fazla ürün kalemi olabilir.
+    customer_name: str = Field(..., min_length=2, max_length=100)
+    items: List[OrderItemBase] = Field(..., min_length=1, max_length=50)
+
+    @field_validator("customer_name")
+    @classmethod
+    def musteri_adi_temizle(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 2:
+            raise ValueError("Müşteri adı en az 2 karakter olmalıdır.")
+        return v
+
 
 class OrderRead(BaseModel):
-    """Veritabanından okunan bir siparişin kullanıcıya gösterilecek hali."""
     id: int
     order_number: str
     customer_name: str
     status: str
     created_at: datetime
     items: List[OrderItemRead]
+    model_config = {"from_attributes": True}
 
-    class Config:
-        from_attributes = True
+
+class SupplierDraftRequest(BaseModel):
+    product_id: int = Field(gt=0)
+    quantity: int = Field(default=50, gt=0, le=10000)
+
+
+class NotificationRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    message: str = Field(..., min_length=1, max_length=2000)
+    channel: str = Field(default="system")
+
+    @field_validator("channel")
+    @classmethod
+    def kanal_gecerli_olmali(cls, v: str) -> str:
+        gecerli_kanallar = {"system", "email", "whatsapp", "telegram"}
+        if v not in gecerli_kanallar:
+            raise ValueError(f"Geçersiz kanal. Geçerli seçenekler: {', '.join(gecerli_kanallar)}")
+        return v

@@ -6,7 +6,7 @@ from app.config import settings
 class AIService:
     def __init__(self):
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        self.model_id = "gemini-2.0-flash"
+        self.model_id = "gemini-2.5-flash"
 
     async def generate_stock_alert_email(self, product_name: str, current_stock: int, supplier_email: str) -> str:
         system_prompt = (

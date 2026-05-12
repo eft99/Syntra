@@ -1,28 +1,22 @@
-import os
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+
 
 class Settings(BaseSettings):
-    """
-    Bu class, .env dosyasındaki ortam değişkenlerini okur ve
-    kod içinde tip güvenli bir şekilde kullanmamızı sağlar
-    """
-
-    # Veritabanı bağlantı adresi ve anahtarı (.env dosyasından çekilecek)
     DATABASE_URL: str
-
-    # Google Gemini yapay zeka anahtarı (.env dosyasından çekilecek)
     GEMINI_API_KEY: str
-
-    # Projemizin adı (.env dosyasından çekilecek)
     PROJECT_NAME: str = "Syntra"
-
-    # Debug (hata ayıklama) modu (.env dosyasından çekilecek)
     DEBUG: bool = False
+    ALLOWED_ORIGINS: str = "http://localhost:3000"
 
-    # Bu ayar, pydantic'e ".env" dosyasını otomatik olarak aramasını söyler.
+    @field_validator("GEMINI_API_KEY")
+    @classmethod
+    def api_key_must_exist(cls, v: str) -> str:
+        if not v or v == "your_gemini_api_key_here":
+            raise ValueError("Geçerli bir GEMINI_API_KEY girilmeli")
+        return v
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-# Ayarları kullanabilmek için sınıfı bir değişkene atıyoruz.
-# Projemizin her yerinde bu 'settings' değişkenini kullanacağız.
+
 settings = Settings()
