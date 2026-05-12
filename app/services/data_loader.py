@@ -7,9 +7,13 @@ toplu (bulk) kayıt yapan servis.
 
 import io
 import pandas as pd
+import logging
 from sqlalchemy.dialects.postgresql import insert
 from app.database import AsyncSessionLocal
 from app.models import Product
+
+# Logger yapılandırması
+logger = logging.getLogger(__name__)
 
 async def process_inventory_excel(file_content: bytes):
     """
@@ -18,18 +22,22 @@ async def process_inventory_excel(file_content: bytes):
     Beklenen Sütunlar:
     - Ürün Adı -> Product.name
     - SKU      -> Product.sku
-    - Stok     -> Product.stock_count
+    - Stok     -> Product.stock_quantity
     - Fiyat    -> Product.price
     """
     
     # 1. Pandas ile Excel dosyasını oku
-    df = pd.read_excel(io.BytesIO(file_content))
+    try:
+        df = pd.read_excel(io.BytesIO(file_content), engine='openpyxl')
+    except Exception as e:
+        logger.error(f"Excel okuma hatası: {e}")
+        return {"status": "error", "message": "Excel dosyası okunamadı. Lütfen dosya formatını kontrol edin."}
     
     # 2. Sütun isimlerini eşleştir ve Türk karakter hassasiyetini yönet
     column_mapping = {
         'Ürün Adı': 'name',
         'SKU': 'sku',
-        'Stok': 'stock_count',
+        'Stok': 'stock_quantity',
         'Fiyat': 'price'
     }
     
@@ -43,12 +51,12 @@ async def process_inventory_excel(file_content: bytes):
     df = df.dropna(subset=['name'])
     
     # - Veri tiplerini dönüştür (Hatalı verileri 0 veya varsayılan yapar)
-    df['stock_count'] = pd.to_numeric(df['stock_count'], errors='coerce').fillna(0).astype(int)
+    df['stock_quantity'] = pd.to_numeric(df['stock_quantity'], errors='coerce').fillna(0).astype(int)
     df['price'] = pd.to_numeric(df['price'], errors='coerce').fillna(0.0).astype(float)
     
     # 4. Veritabanına Kayıt (Bulk Insert)
     # DataFrame'i sözlük listesine dönüştür
-    data_list = df[['name', 'sku', 'stock_count', 'price']].to_dict(orient='records')
+    data_list = df[['name', 'sku', 'stock_quantity', 'price']].to_dict(orient='records')
     
     if not data_list:
         return {"status": "skipped", "message": "Yüklenecek geçerli veri bulunamadı."}
@@ -72,4 +80,5 @@ async def process_inventory_excel(file_content: bytes):
             }
         except Exception as e:
             await session.rollback()
-            return {"status": "error", "message": str(e)}
+            logger.error(f"Veritabanı kayıt hatası: {e}")
+            return {"status": "error", "message": "Veritabanına kayıt sırasında bir hata oluştu."}

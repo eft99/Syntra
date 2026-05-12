@@ -10,6 +10,8 @@ class ProductBase(BaseModel):
     name: str = Field(..., description="Ürünün tam adı", example="Organik Lavanta Sabunu")
     stock_quantity: int = Field(ge=0, description="Stok miktarı, 0'dan küçük olamaz.")
     critical_limit: int = Field(default=10, description="AI uyarısı için kritik stok seviyesi.")
+    price: float = Field(default=0.0, description="Birim fiyat (TL)")
+    category: Optional[str] = Field(None, description="Ürün kategorisi")
     supplier_email: Optional[str] = Field(None, description="Tedarikçinin e-posta adresi.")
 
 class ProductCreate(ProductBase):
@@ -19,6 +21,8 @@ class ProductCreate(ProductBase):
 class ProductRead(ProductBase):
     """Veritabanından bir ürün okunduğunda kullanıcıya gösterilecek şema."""
     id: int
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         # Bu ayar, SQLAlchemy model nesnelerini otomatik olarak

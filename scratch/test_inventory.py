@@ -4,8 +4,11 @@ from app.services.inventory_service import seed_test_data, get_low_stock_items, 
 from app.database import init_db
 
 async def run_analytics_test():
-    print("--- Veritabanı Hazırlanıyor ---")
-    await init_db()
+    print("--- Veritabanı Temizleniyor ---")
+    from app.database import engine, Base
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
     
     print("\n--- Test Verileri Ekleniyor ---")
     await seed_test_data()
@@ -13,7 +16,7 @@ async def run_analytics_test():
     print("\n--- Kritik Stok Analizi (Eşik: 10) ---")
     low_stock = await get_low_stock_items(threshold=10)
     for item in low_stock:
-        print(f"⚠️ Düşük Stok: {item['name']} (SKU: {item['sku']}) - Adet: {item['stock_count']}")
+        print(f"⚠️ Düşük Stok: {item['name']} (SKU: {item['sku']}) - Adet: {item['stock_quantity']}")
     
     print("\n--- Genel Envanter Özeti ---")
     summary = await get_inventory_summary()

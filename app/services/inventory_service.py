@@ -16,11 +16,11 @@ async def get_low_stock_items(threshold: int = 10) -> List[Dict[str, Any]]:
     Performans için sadece gerekli kolonları seçer.
     """
     async with AsyncSessionLocal() as session:
-        # Sorgu optimizasyonu: Sadece gerekli kolonları seç (SELECT id, name, sku, stock_count)
+        # Sorgu optimizasyonu: Sadece gerekli kolonları seç (SELECT id, name, sku, stock_quantity)
         stmt = (
-            select(Product.id, Product.name, Product.sku, Product.stock_count)
-            .where(Product.stock_count < threshold)
-            .order_by(Product.stock_count.asc())
+            select(Product.id, Product.name, Product.sku, Product.stock_quantity)
+            .where(Product.stock_quantity < threshold)
+            .order_by(Product.stock_quantity.asc())
         )
         result = await session.execute(stmt)
         # Row nesnelerini sözlük listesine dönüştür
@@ -34,7 +34,7 @@ async def get_inventory_summary() -> Dict[str, Any]:
         # 1. Toplam Ürün Sayısı ve Toplam Envanter Değeri (DB-side calculation)
         summary_stmt = select(
             func.count(Product.id).label("total_products"),
-            func.sum(Product.price * Product.stock_count).label("total_value")
+            func.sum(Product.price * Product.stock_quantity).label("total_value")
         )
         summary_res = await session.execute(summary_stmt)
         summary = summary_res.one()
@@ -59,18 +59,18 @@ async def seed_test_data():
     Demo için 10-15 tane gerçekçi örnek ürün ekler.
     """
     test_products = [
-        {"name": "MacBook Pro 16", "sku": "LAP-001", "price": 85000.00, "stock_count": 5},
-        {"name": "Gaming Monitor 27", "sku": "MON-001", "price": 12500.00, "stock_count": 12},
-        {"name": "Mekanik Klavye RGB", "sku": "KBD-001", "price": 3200.00, "stock_count": 25},
-        {"name": "Kablosuz Mouse", "sku": "MSE-001", "price": 1850.00, "stock_count": 8},
-        {"name": "USB-C Hub 7-in-1", "sku": "ACC-001", "price": 1200.00, "stock_count": 40},
-        {"name": "iPhone 15 Pro", "sku": "PHN-001", "price": 72000.00, "stock_count": 3},
-        {"name": "Noise Cancelling Headphones", "sku": "AUD-001", "price": 9500.00, "stock_count": 15},
-        {"name": "Laptop Standı Alüminyum", "sku": "ACC-002", "price": 850.00, "stock_count": 30},
-        {"name": "External SSD 1TB", "sku": "STR-001", "price": 4200.00, "stock_count": 20},
-        {"name": "Webcam 4K", "sku": "CAM-001", "price": 5400.00, "stock_count": 7},
-        {"name": "Bluetooth Hoparlör", "sku": "AUD-002", "price": 2800.00, "stock_count": 18},
-        {"name": "Akıllı Saat", "sku": "WCH-001", "price": 11000.00, "stock_count": 10}
+        {"name": "MacBook Pro 16", "sku": "LAP-001", "price": 85000.00, "stock_quantity": 5},
+        {"name": "Gaming Monitor 27", "sku": "MON-001", "price": 12500.00, "stock_quantity": 12},
+        {"name": "Mekanik Klavye RGB", "sku": "KBD-001", "price": 3200.00, "stock_quantity": 25},
+        {"name": "Kablosuz Mouse", "sku": "MSE-001", "price": 1850.00, "stock_quantity": 8},
+        {"name": "USB-C Hub 7-in-1", "sku": "ACC-001", "price": 1200.00, "stock_quantity": 40},
+        {"name": "iPhone 15 Pro", "sku": "PHN-001", "price": 72000.00, "stock_quantity": 3},
+        {"name": "Noise Cancelling Headphones", "sku": "AUD-001", "price": 9500.00, "stock_quantity": 15},
+        {"name": "Laptop Standı Alüminyum", "sku": "ACC-002", "price": 850.00, "stock_quantity": 30},
+        {"name": "External SSD 1TB", "sku": "STR-001", "price": 4200.00, "stock_quantity": 20},
+        {"name": "Webcam 4K", "sku": "CAM-001", "price": 5400.00, "stock_quantity": 7},
+        {"name": "Bluetooth Hoparlör", "sku": "AUD-002", "price": 2800.00, "stock_quantity": 18},
+        {"name": "Akıllı Saat", "sku": "WCH-001", "price": 11000.00, "stock_quantity": 10}
     ]
 
     async with AsyncSessionLocal() as session:
