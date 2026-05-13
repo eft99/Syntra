@@ -305,10 +305,21 @@ async def send_notification(
     response_model=ForgotPasswordResponse,
     tags=["Auth"],
 )
-async def forgot_password(body: ForgotPasswordRequest) -> ForgotPasswordResponse:
-    """Kayıtlı e-posta için sıfırlama (demo; gerçek mail gönderilmez)."""
-    sent = body.email in _REGISTERED_RESET_EMAILS
-    return ForgotPasswordResponse(sent=sent)
+async def forgot_password(
+    body: ForgotPasswordRequest, 
+    db: AsyncSession = Depends(get_db)
+) -> ForgotPasswordResponse:
+    """Kayıtlı e-posta için sıfırlama (Güvenli: Kullanıcı Tespiti sızıntısı engellendi)."""
+    result = await db.execute(select(User).where(User.email == body.email))
+    user = result.scalar_one_or_none()
+    
+    if user:
+        # Gerçek bir sistemde burada mail gönderim servisi çağrılır
+        logger.info("Sifre sifirlama maili tetiklendi: %s", body.email)
+    
+    # GÜVENLİK KRİTİK: E-posta sistemde olsa da olmasa da 'gönderildi' (sent=True) dönüyoruz.
+    # Böylece saldırganlar e-posta adreslerini sorgulayarak sızıntı yapamaz.
+    return ForgotPasswordResponse(sent=True)
 
 
 @router.get("/operations/summary", tags=["Operasyon"])
