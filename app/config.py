@@ -19,6 +19,10 @@ class Settings(BaseSettings):
         description="İzin verilen tarayıcı kökenleri (CSV)",
     )
 
+    SECRET_KEY: str = Field(default="super-secret-key-change-it-in-production", description="JWT imzalama anahtarı")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60 * 24 * 7, description="Token geçerlilik süresi (dakika)")
+
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
