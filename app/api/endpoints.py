@@ -4,7 +4,7 @@ import uuid
 from typing import List, Literal, Optional
 
 import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +21,24 @@ from app.schemas import (
     ProductCreate,
     ProductRead,
     SupplierDraftRequest,
+    UserCreate,
+    UserRead,
+    Token,
 )
+from app.services.auth_service import (
+    verify_password,
+    get_password_hash,
+    create_access_token,
+    decode_token,
+)
+from app.models import User
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+security = HTTPBearer()
+limiter = Limiter(key_func=get_remote_address)
+
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +51,40 @@ _REGISTERED_RESET_EMAILS = frozenset(
     }
 )
 
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: AsyncSession = Depends(get_db)):
+    token = credentials.credentials
+    payload = decode_token(token)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz veya süresi dolmuş token")
+    
+    username = payload.get("sub")
+    if not username:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token kullanıcı bilgisi içermiyor")
+        
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Kullanıcı bulunamadı")
+    return user
+
+def require_role(role: str):
+    async def role_checker(user: User = Depends(get_current_user)):
+        if user.role != role and user.role != "admin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu işlem için yetkiniz yok")
+        return user
+    return role_checker
+
+
 ALLOWED_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 @router.get("/products", response_model=List[ProductRead], tags=["Ürünler"])
-async def list_products(skip: int = 0, limit: int = 20, db: AsyncSession = Depends(get_db)):
+async def list_products(
+    skip: int = 0, 
+    limit: int = 20, 
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
     if skip < 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="'skip' değeri negatif olamaz.")
     limit = min(max(limit, 1), 100)
@@ -47,7 +93,11 @@ async def list_products(skip: int = 0, limit: int = 20, db: AsyncSession = Depen
 
 
 @router.get("/products/{product_id}", response_model=ProductRead, tags=["Ürünler"])
-async def get_product(product_id: int, db: AsyncSession = Depends(get_db)):
+async def get_product(
+    product_id: int, 
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
     if product_id <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Geçersiz ürün ID'si.")
     result = await db.execute(select(Product).where(Product.id == product_id))
@@ -58,7 +108,11 @@ async def get_product(product_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/products", response_model=ProductRead, status_code=status.HTTP_201_CREATED, tags=["Ürünler"])
-async def create_product(data: ProductCreate, db: AsyncSession = Depends(get_db)):
+async def create_product(
+    data: ProductCreate, 
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin"))
+):
     existing = await db.execute(select(Product).where(Product.sku == data.sku))
     if existing.scalar_one_or_none():
         raise HTTPException(status.HTTP_409_CONFLICT, detail=f"Bu ürün kodu zaten kayıtlı: {data.sku}")
@@ -87,7 +141,11 @@ async def download_template():
 
 
 @router.post("/upload-products", tags=["Excel"])
-async def upload_products(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def upload_products(
+    file: UploadFile = File(...), 
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin"))
+):
     if not file.filename or not file.filename.endswith(".xlsx") or file.content_type != ALLOWED_MIME:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Sadece .xlsx dosyaları kabul edilir.")
 
@@ -135,7 +193,11 @@ async def upload_products(file: UploadFile = File(...), db: AsyncSession = Depen
 
 
 @router.get("/orders", response_model=List[OrderRead], tags=["Siparişler"])
-async def list_orders(status_filter: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+async def list_orders(
+    status_filter: Optional[str] = None, 
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
     query = select(Order).options(selectinload(Order.items))
     if status_filter:
         gecerli_durumlar = {"Bekliyor", "Tamamlandı", "İptal"}
@@ -147,7 +209,11 @@ async def list_orders(status_filter: Optional[str] = None, db: AsyncSession = De
 
 
 @router.post("/orders", response_model=OrderRead, status_code=status.HTTP_201_CREATED, tags=["Siparişler"])
-async def create_order(data: OrderCreate, db: AsyncSession = Depends(get_db)):
+async def create_order(
+    data: OrderCreate, 
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
     order = Order(order_number=f"ORD-{uuid.uuid4().hex[:8].upper()}", customer_name=data.customer_name)
     db.add(order)
     await db.flush()
@@ -168,7 +234,12 @@ async def create_order(data: OrderCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/ai/stock-alerts", tags=["Yapay Zeka"])
-async def ai_stock_alerts(db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/minute")
+async def ai_stock_alerts(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
     result = await db.execute(select(Product).where(Product.stock_quantity <= Product.critical_limit))
     critical = result.scalars().all()
 
@@ -194,7 +265,11 @@ async def ai_stock_alerts(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/supplier/draft", tags=["Yapay Zeka"])
-async def supplier_draft(data: SupplierDraftRequest, db: AsyncSession = Depends(get_db)):
+async def supplier_draft(
+    data: SupplierDraftRequest, 
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
     result = await db.execute(select(Product).where(Product.id == data.product_id))
     product = result.scalar_one_or_none()
     if not product:
@@ -216,7 +291,10 @@ async def supplier_draft(data: SupplierDraftRequest, db: AsyncSession = Depends(
 
 
 @router.post("/notifications/send", tags=["Bildirimler"])
-async def send_notification(data: NotificationRequest):
+async def send_notification(
+    data: NotificationRequest,
+    user: User = Depends(require_role("admin"))
+):
     from app.services.notification_service import dispatch
     await dispatch(channel=data.channel, title=data.title, message=data.message)
     return {"durum": "gönderildi", "kanal": data.channel, "baslik": data.title}
@@ -234,7 +312,10 @@ async def forgot_password(body: ForgotPasswordRequest) -> ForgotPasswordResponse
 
 
 @router.get("/operations/summary", tags=["Operasyon"])
-async def operations_summary(db: AsyncSession = Depends(get_db)):
+async def operations_summary(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
     products = (await db.execute(select(Product))).scalars().all()
     critical = [p for p in products if p.stock_quantity <= p.critical_limit]
     pending = (await db.execute(select(Order).where(Order.status == "Bekliyor"))).scalars().all()
@@ -249,3 +330,38 @@ async def operations_summary(db: AsyncSession = Depends(get_db)):
             for p in critical
         ],
     }
+
+
+@router.post("/auth/register", response_model=UserRead, tags=["Auth"])
+@limiter.limit("5/minute")
+async def register(request: Request, data: UserCreate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.username == data.username))
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    hashed_password = get_password_hash(data.password)
+    user = User(
+        username=data.username,
+        email=data.email,
+        hashed_password=hashed_password,
+        role="user"  # Default role
+    )
+    db.add(user)
+    await db.flush()
+    await db.refresh(user)
+    return user
+
+
+@router.post("/auth/login", response_model=Token, tags=["Auth"])
+@limiter.limit("10/minute")
+async def login(request: Request, data: UserCreate, db: AsyncSession = Depends(get_db)):
+    # Simple login using UserCreate schema for convenience (only username and password needed)
+    result = await db.execute(select(User).where(User.username == data.username))
+    user = result.scalar_one_or_none()
+    
+    if not user or not verify_password(data.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    
+    access_token = create_access_token(data={"sub": user.username, "role": user.role})
+    return {"access_token": access_token, "token_type": "bearer"}
+
