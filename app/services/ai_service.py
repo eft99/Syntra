@@ -32,13 +32,16 @@ class AIService:
 
     async def analyze_stock_alerts(self, products: list) -> str:
         product_list = "\n".join(
-            f"- {p.name} (SKU: {p.sku}): stok={p.stock_quantity}, limit={p.critical_limit}"
+            f"- {p.name} (SKU: {p.sku}): Mevcut Stok={p.stock_quantity}, Kritik Limit={p.critical_limit}"
             for p in products
         )
         prompt = (
-            f"Aşağıdaki ürünlerin stoğu kritik seviyenin altına düşmüştür:\n{product_list}\n\n"
-            "Operasyon müdürüne kısa, net ve aksiyona dönük bir analiz yaz. "
-            "Öncelik sırasına göre aksiyon öner."
+            f"Aşağıdaki ürünler kritik stok seviyesinin altına düşmüştür:\n{product_list}\n\n"
+            "Sen Syntra Akıllı Operasyon Asistanısın. Bu verileri analiz ederek operasyon müdürüne şu yapıda bir rapor sun:\n"
+            "1. **Kritiklik Analizi:** Hangi ürünlerin tükenme riski daha yüksek? (Aciliyet Skoru: 1-10)\n"
+            "2. **Akıllı Sipariş Önerisi:** Mevcut limitleri ve stok durumunu göz önüne alarak, her ürün için 'Önerilen Sipariş Miktarı' tahmini yap.\n"
+            "3. **Operasyonel Tavsiye:** Tedarik zinciri aksamaması için atılması gereken ilk 3 adımı belirt.\n\n"
+            "Yanıtın profesyonel, veriye dayalı ve kısa-öz olsun."
         )
         response = await self.client.aio.models.generate_content(
             model=self.model_id,
