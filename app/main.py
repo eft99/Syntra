@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.config import settings
+from app.api import endpoints
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -26,8 +28,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(endpoints.router)
 
-app.get("/health", tags=["System"])
+@app.get("/health", tags=["System"])
 async def health_check():
     """
     Bu basit endpoint, Docker'ın uygulamamızın 'canlı' olup olmadığını
