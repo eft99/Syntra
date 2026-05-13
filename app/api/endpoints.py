@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models import Order, OrderItem, Product
+from app.models import Order, OrderItem, Product, User
 from app.schemas import (
     NotificationRequest,
     OrderCreate,
@@ -22,6 +22,8 @@ from app.schemas import (
     UserCreate,
     UserRead,
     Token,
+    ForgotPasswordRequest,
+    ForgotPasswordResponse
 )
 from app.services.auth_service import (
     verify_password,
@@ -29,7 +31,6 @@ from app.services.auth_service import (
     create_access_token,
     decode_token,
 )
-from app.models import User
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -57,7 +58,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     
     username = payload.get("sub")
     if not username:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token kullanıcı bilgisi içörimiyor")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token kullanıcı bilgisi içermiyor")
         
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
@@ -71,6 +72,7 @@ def require_role(role: str):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu işlem için yetkiniz yok")
         return user
     return role_checker
+
 ALLOWED_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
@@ -296,6 +298,28 @@ async def send_notification(
     return {"durum": "gönderildi", "kanal": data.channel, "baslik": data.title}
 
 
+@router.post(
+    "/auth/forgot-password",
+    response_model=ForgotPasswordResponse,
+    tags=["Auth"],
+)
+async def forgot_password(
+    body: ForgotPasswordRequest, 
+    db: AsyncSession = Depends(get_db)
+) -> ForgotPasswordResponse:
+    """Kayıtlı e-posta için sıfırlama (Güvenli: Kullanıcı Tespiti sızıntısı engellendi)."""
+    result = await db.execute(select(User).where(User.email == body.email))
+    user = result.scalar_one_or_none()
+    
+    if user:
+        # Gerçek bir sistemde burada mail gönderim servisi çağrılır
+        logger.info("Sifre sifirlama maili tetiklendi: %s", body.email)
+    
+    # GÜVENLİK KRİTİK: E-posta sistemde olsa da olmasa da 'gönderildi' (sent=True) dönüyoruz.
+    # Böylece saldırganlar e-posta adreslerini sorgulayarak sızıntı yapamaz.
+    return ForgotPasswordResponse(sent=True)
+
+
 @router.get("/operations/summary", tags=["Operasyon"])
 async def operations_summary(
     db: AsyncSession = Depends(get_db),
@@ -349,4 +373,3 @@ async def login(request: Request, data: UserCreate, db: AsyncSession = Depends(g
     
     access_token = create_access_token(data={"sub": user.username, "role": user.role})
     return {"access_token": access_token, "token_type": "bearer"}
-
