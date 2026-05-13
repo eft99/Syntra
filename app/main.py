@@ -1,15 +1,23 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from app.api.demo import router as demo_router
 from app.api.endpoints import router
 from app.config import settings
-from app.database import Base, engine
+from app.database import Base, engine, AsyncSessionLocal
+from app.models import User
+from app.services.auth_service import get_password_hash
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
+
+limiter = Limiter(key_func=get_remote_address)
 
 tags_metadata = [
     {
@@ -56,6 +64,20 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Syntra API baslatildi. Tablolar hazirlandi.")
+    
+    # Otomatik Admin Oluşturma
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(User).where(User.username == "admin"))
+        if not result.scalar_one_or_none():
+            admin_user = User(
+                username="admin",
+                email="admin@syntra.app",
+                hashed_password=get_password_hash("admin123"),
+                role="admin"
+            )
+            session.add(admin_user)
+            await session.commit()
+            logger.info("Varsayilan admin kullanicisi olusturuldu: admin / admin123")
     yield
     logger.info("Syntra API kapatildi.")
 
@@ -78,6 +100,10 @@ app = FastAPI(
         "name": "Syntra Ekibi",
     },
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
 
