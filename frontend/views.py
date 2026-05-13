@@ -40,11 +40,11 @@ def _critical_alerts_from_products(products: list[dict[str, Any]]) -> list[dict[
     return out
 
 
-def render_tab_operations(lang: str) -> None:
+def render_tab_operations(lang: str, token: Optional[str] = None) -> None:
     st.subheader(t(lang, "tab_ops"))
     try:
-        products = api_client.get_products()
-        orders = api_client.get_orders()
+        products = api_client.get_products(token)
+        orders = api_client.get_orders(token)
     except Exception as e:
         st.warning(f"{t(lang, 'backend_fail')}: {e}")
         products, orders = [], []
@@ -68,7 +68,7 @@ def render_tab_operations(lang: str) -> None:
         st.bar_chart(chart_df)
 
 
-def render_tab_inventory(lang: str, role: str) -> None:
+def render_tab_inventory(lang: str, role: str, token: Optional[str] = None) -> None:
     st.subheader(t(lang, "tab_inv"))
     is_admin = role == "admin"
 
@@ -76,7 +76,7 @@ def render_tab_inventory(lang: str, role: str) -> None:
     with c_seed:
         if st.button(t(lang, "seed"), disabled=not is_admin, use_container_width=True):
             try:
-                api_client.post_demo_seed()
+                api_client.post_demo_seed(token)
                 st.success("OK")
                 st.rerun()
             except APIError as e:
@@ -86,7 +86,7 @@ def render_tab_inventory(lang: str, role: str) -> None:
     with c_reset:
         if st.button(t(lang, "reset"), disabled=not is_admin, use_container_width=True):
             try:
-                api_client.post_demo_reset()
+                api_client.post_demo_reset(token)
                 st.success("OK")
                 st.rerun()
             except APIError as e:
@@ -98,7 +98,7 @@ def render_tab_inventory(lang: str, role: str) -> None:
             st.rerun()
 
     try:
-        products = api_client.get_products()
+        products = api_client.get_products(token)
     except Exception as e:
         st.error(f"{t(lang, 'backend_fail')}: {e}")
         products = []
@@ -133,7 +133,7 @@ def render_tab_inventory(lang: str, role: str) -> None:
         st.dataframe(records_to_preview_df(st.session_state.parsed_records), use_container_width=True)
         if st.button(t(lang, "inv_send"), type="primary"):
             try:
-                api_client.post_products_import(st.session_state.parsed_records)
+                api_client.post_products_import(st.session_state.parsed_records, token)
                 st.success("OK")
                 st.session_state.parsed_records = None
                 st.session_state.parse_warnings = []
@@ -144,7 +144,7 @@ def render_tab_inventory(lang: str, role: str) -> None:
                 st.error(str(e))
 
 
-def render_tab_ai(lang: str) -> None:
+def render_tab_ai(lang: str, token: Optional[str] = None) -> None:
     st.subheader(t(lang, "tab_ai"))
     if "ai_messages" not in st.session_state:
         st.session_state.ai_messages = []
@@ -160,7 +160,7 @@ def render_tab_ai(lang: str) -> None:
     if prompt:
         st.session_state.ai_messages.append({"role": "user", "content": prompt})
         try:
-            reply = api_client.post_ai_chat(st.session_state.ai_messages)
+            reply = api_client.post_ai_chat(st.session_state.ai_messages, token=token)
             st.session_state.ai_messages.append({"role": "assistant", "content": reply})
         except APIError as e:
             st.session_state.ai_messages.append(
@@ -173,17 +173,17 @@ def render_tab_ai(lang: str) -> None:
         st.rerun()
 
 
-def render_tab_notifications(lang: str) -> None:
+def render_tab_notifications(lang: str, token: Optional[str] = None) -> None:
     st.subheader(t(lang, "tab_notif"))
     try:
-        products = api_client.get_products()
+        products = api_client.get_products(token)
     except Exception as e:
         st.error(f"{t(lang, 'backend_fail')}: {e}")
         products = []
 
     alerts: Optional[list] = None
     try:
-        alerts = api_client.get_stock_alerts()
+        alerts = api_client.get_stock_alerts(token)
     except APIError:
         alerts = None
     except Exception:
