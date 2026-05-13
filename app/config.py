@@ -1,24 +1,17 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
+from pydantic import Field
+from typing import Optional
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str
-    GEMINI_API_KEY: str
+    DATABASE_URL: str = "sqlite+aiosqlite:///./syntra.db"
+    GEMINI_API_KEY: Optional[str] = None
     PROJECT_NAME: str = "Syntra"
     DEBUG: bool = False
-    ALLOWED_ORIGINS: str = "http://localhost:3000"
-
-    @field_validator("GEMINI_API_KEY")
-    @classmethod
-    def api_key_must_exist(cls, v: str) -> str:
-        if not v or v == "your_gemini_api_key_here":
-            raise ValueError("Geçerli bir GEMINI_API_KEY girilmeli")
-        return v
+    ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8501"
 
     SECRET_KEY: str = Field(default="super-secret-key-change-it-in-production", description="JWT imzalama anahtarı")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60 * 24 * 7, description="Token geçerlilik süresi (dakika)")
-
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
