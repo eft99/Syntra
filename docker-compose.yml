@@ -1,26 +1,38 @@
 version: '3.8'
 
 services:
+
+  # -----------------------------------------------------------------------
+  # PostgreSQL 15 — Ana veritabanı
+  # -----------------------------------------------------------------------
   db:
-    image: postgres:16-alpine
-    container_name: kobi_db
+    image: postgres:15-alpine
+    container_name: syntra_db
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: secret_password
-      POSTGRES_DB: kobi_os
+      POSTGRES_USER: ${POSTGRES_USER:-syntra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-syntra_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-syntra_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"           # Yerel geliştirme için dışa açık (prod'da kapat)
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d kobi_os"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-syntra} -d ${POSTGRES_DB:-syntra_db}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
     networks:
       - hackathon_net
 
+  # -----------------------------------------------------------------------
+  # FastAPI — Backend API
+  # -----------------------------------------------------------------------
   api:
     build: .
-    container_name: kobi_api
+    container_name: syntra_api
+    restart: unless-stopped
     env_file:
       - .env
     ports:
@@ -33,23 +45,33 @@ services:
     networks:
       - hackathon_net
 
+  # -----------------------------------------------------------------------
+  # Streamlit — Frontend UI
+  # -----------------------------------------------------------------------
   ui:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    container_name: kobi_ui
+    container_name: syntra_ui
+    restart: unless-stopped
     ports:
       - "8501:8501"
     env_file:
       - .env
+    environment:
+      SYNTRA_API_BASE_URL: http://api:8000
     depends_on:
       - api
     networks:
       - hackathon_net
 
+# -----------------------------------------------------------------------
+# Ağ ve kalıcı veri
+# -----------------------------------------------------------------------
 networks:
   hackathon_net:
     driver: bridge
 
 volumes:
   postgres_data:
+    driver: local

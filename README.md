@@ -5,6 +5,8 @@
 AI destekli modern operasyon yönetim platformu.  
 Syntra; KOBİ’lerin stok, sipariş, operasyon, tedarik ve müşteri süreçlerini merkezi, ölçeklenebilir ve akıllı bir sistem altında birleştirmek için geliştirilmiştir.
 
+**Takım / GitHub:** Repoyu klonladıktan sonra kurulum, `.env`, Docker ve demo giriş bilgileri için **[SETUP.md](SETUP.md)** dosyasına bakın.
+
 ---
 
 # 📌 Proje Hakkında
