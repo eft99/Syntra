@@ -4,7 +4,8 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Order, OrderItem, Product
+from app.models import Order, OrderItem, Product, User
+from app.api.endpoints import get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,10 @@ ORNEK_URUNLER = [
 
 
 @router.post("/seed", status_code=status.HTTP_201_CREATED)
-async def seed_demo_data(db: AsyncSession = Depends(get_db)):
+async def seed_demo_data(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin"))
+):
     eklenen = 0
     for veri in ORNEK_URUNLER:
         mevcut = (await db.execute(select(Product).where(Product.sku == veri["sku"]))).scalar_one_or_none()
@@ -42,6 +46,7 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)):
 async def reset_demo_data(
     onayla: str = Query(..., description="Silme işlemini onaylamak için 'evet' yazın."),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin"))
 ):
     if onayla.strip().lower() != "evet":
         raise HTTPException(

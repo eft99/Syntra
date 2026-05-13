@@ -42,6 +42,7 @@ def get_products() -> list[dict[str, Any]]:
 
 
 def post_demo_seed() -> dict[str, Any]:
+    # Seed endpoint is POST /api/demo/seed
     r = requests.post(f"{API_PREFIX}/demo/seed", timeout=DEFAULT_TIMEOUT)
     if r.status_code not in (200, 201):
         raise APIError(r.text or "Seed başarısız", r.status_code)
@@ -52,7 +53,8 @@ def post_demo_seed() -> dict[str, Any]:
 
 
 def post_demo_reset() -> dict[str, Any]:
-    r = requests.post(f"{API_PREFIX}/demo/reset", timeout=DEFAULT_TIMEOUT)
+    # Reset endpoint is DELETE /api/demo/reset?onayla=evet
+    r = requests.delete(f"{API_PREFIX}/demo/reset", params={"onayla": "evet"}, timeout=DEFAULT_TIMEOUT)
     if r.status_code not in (200, 201):
         raise APIError(r.text or "Reset başarısız", r.status_code)
     try:
@@ -63,28 +65,23 @@ def post_demo_reset() -> dict[str, Any]:
 
 def post_products_import(records: list[dict[str, Any]]) -> dict[str, Any]:
     """
-    Toplu içe aktarma — önce /api/products/import, yoksa /api/upload-products (multipart) denenmez;
-    tek JSON gövdesi: { "products": [...] }
+    Toplu içe aktarma — Backend'de /api/products (POST) veya /api/upload-products (Excel) var.
+    Burada JSON listesi gönderiyoruz, bu yüzden /api/products endpoint'ine döngüyle veya toplu (varsa) atılmalı.
+    Şu anki endpoints.py'de toplu JSON importu yok, sadece tekil /api/products POST var.
+    Demo için /api/demo/seed kullanılması önerilir.
     """
-    r = requests.post(
-        f"{API_PREFIX}/products/import",
-        json={"products": records},
-        timeout=DEFAULT_TIMEOUT,
-    )
-    if r.status_code == 404:
-        r = requests.post(
-            f"{API_PREFIX}/products/bulk",
-            json={"products": records},
-            timeout=DEFAULT_TIMEOUT,
-        )
-    if r.status_code == 404:
-        raise APIError("/api/products/import veya bulk tanımlı değil.", 404)
-    if r.status_code >= 400:
-        raise APIError(r.text or "İçe aktarma hatası", r.status_code)
-    try:
-        return r.json()
-    except Exception:
-        return {"ok": True}
+    # Eğer backend'de toplu import ucu yoksa hata verelim veya tek tek gönderelim.
+    # Mevcut endpoints.py'de @router.post("/products") tekil ürün alır.
+    errors = []
+    for rec in records:
+        r = requests.post(f"{API_PREFIX}/products", json=rec, timeout=DEFAULT_TIMEOUT)
+        if r.status_code >= 400:
+            errors.append(f"{rec.get('sku')}: {r.text}")
+    
+    if errors:
+        raise APIError("Bazı ürünler yüklenemedi: " + "; ".join(errors[:3]))
+    
+    return {"ok": True}
 
 
 def get_orders() -> list[dict[str, Any]]:
