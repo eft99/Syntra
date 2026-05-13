@@ -19,15 +19,36 @@ class APIError(Exception):
         self.status_code = status_code
 
 
+def _get_headers(token: Optional[str] = None) -> dict[str, str]:
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def login(username: str, password: str) -> dict[str, Any]:
+    """POST /api/auth/login — {username, password}"""
+    # Backend login uses UserCreate schema fields: username, email (optional), password
+    # We send dummy email if needed, but current login endpoint only needs username/password
+    r = requests.post(
+        f"{API_PREFIX}/auth/login",
+        json={"username": username, "password": password, "email": f"{username}@syntra.app"},
+        timeout=DEFAULT_TIMEOUT
+    )
+    if r.status_code >= 400:
+        raise APIError("Giriş başarısız: " + (r.json().get("detail") or r.text), r.status_code)
+    return r.json()
+
+
 def health() -> dict[str, Any]:
     r = requests.get(f"{BASE_URL}/health", timeout=5)
     r.raise_for_status()
     return r.json()
 
 
-def get_products() -> list[dict[str, Any]]:
+def get_products(token: Optional[str] = None) -> list[dict[str, Any]]:
     """GET /api/products — liste veya {items:[]} sarmalayıcısı."""
-    r = requests.get(f"{API_PREFIX}/products", timeout=DEFAULT_TIMEOUT)
+    r = requests.get(f"{API_PREFIX}/products", headers=_get_headers(token), timeout=DEFAULT_TIMEOUT)
     if r.status_code == 404:
         return []
     r.raise_for_status()
@@ -41,9 +62,9 @@ def get_products() -> list[dict[str, Any]]:
     return []
 
 
-def post_demo_seed() -> dict[str, Any]:
+def post_demo_seed(token: Optional[str] = None) -> dict[str, Any]:
     # Seed endpoint is POST /api/demo/seed
-    r = requests.post(f"{API_PREFIX}/demo/seed", timeout=DEFAULT_TIMEOUT)
+    r = requests.post(f"{API_PREFIX}/demo/seed", headers=_get_headers(token), timeout=DEFAULT_TIMEOUT)
     if r.status_code not in (200, 201):
         raise APIError(r.text or "Seed başarısız", r.status_code)
     try:
@@ -52,9 +73,9 @@ def post_demo_seed() -> dict[str, Any]:
         return {"ok": True, "detail": r.text}
 
 
-def post_demo_reset() -> dict[str, Any]:
+def post_demo_reset(token: Optional[str] = None) -> dict[str, Any]:
     # Reset endpoint is DELETE /api/demo/reset?onayla=evet
-    r = requests.delete(f"{API_PREFIX}/demo/reset", params={"onayla": "evet"}, timeout=DEFAULT_TIMEOUT)
+    r = requests.delete(f"{API_PREFIX}/demo/reset", params={"onayla": "evet"}, headers=_get_headers(token), timeout=DEFAULT_TIMEOUT)
     if r.status_code not in (200, 201):
         raise APIError(r.text or "Reset başarısız", r.status_code)
     try:
@@ -63,7 +84,7 @@ def post_demo_reset() -> dict[str, Any]:
         return {"ok": True}
 
 
-def post_products_import(records: list[dict[str, Any]]) -> dict[str, Any]:
+def post_products_import(records: list[dict[str, Any]], token: Optional[str] = None) -> dict[str, Any]:
     """
     Toplu içe aktarma — Backend'de /api/products (POST) veya /api/upload-products (Excel) var.
     Burada JSON listesi gönderiyoruz, bu yüzden /api/products endpoint'ine döngüyle veya toplu (varsa) atılmalı.
@@ -74,7 +95,7 @@ def post_products_import(records: list[dict[str, Any]]) -> dict[str, Any]:
     # Mevcut endpoints.py'de @router.post("/products") tekil ürün alır.
     errors = []
     for rec in records:
-        r = requests.post(f"{API_PREFIX}/products", json=rec, timeout=DEFAULT_TIMEOUT)
+        r = requests.post(f"{API_PREFIX}/products", json=rec, headers=_get_headers(token), timeout=DEFAULT_TIMEOUT)
         if r.status_code >= 400:
             errors.append(f"{rec.get('sku')}: {r.text}")
     
@@ -84,8 +105,8 @@ def post_products_import(records: list[dict[str, Any]]) -> dict[str, Any]:
     return {"ok": True}
 
 
-def get_orders() -> list[dict[str, Any]]:
-    r = requests.get(f"{API_PREFIX}/orders", timeout=DEFAULT_TIMEOUT)
+def get_orders(token: Optional[str] = None) -> list[dict[str, Any]]:
+    r = requests.get(f"{API_PREFIX}/orders", headers=_get_headers(token), timeout=DEFAULT_TIMEOUT)
     if r.status_code == 404:
         return []
     r.raise_for_status()
@@ -97,12 +118,12 @@ def get_orders() -> list[dict[str, Any]]:
     return []
 
 
-def post_ai_chat(messages: list[dict[str, str]], context: Optional[str] = None) -> str:
+def post_ai_chat(messages: list[dict[str, str]], context: Optional[str] = None, token: Optional[str] = None) -> str:
     """POST /api/ai/chat — {messages, context?}"""
     body: dict[str, Any] = {"messages": messages}
     if context:
         body["context"] = context
-    r = requests.post(f"{API_PREFIX}/ai/chat", json=body, timeout=60)
+    r = requests.post(f"{API_PREFIX}/ai/chat", json=body, headers=_get_headers(token), timeout=60)
     if r.status_code == 404:
         raise APIError("AI sohbet ucu henüz backend'de yok (/api/ai/chat).", 404)
     if r.status_code >= 400:
@@ -115,9 +136,9 @@ def post_ai_chat(messages: list[dict[str, str]], context: Optional[str] = None) 
     return str(data)
 
 
-def get_stock_alerts() -> list[dict[str, Any]]:
+def get_stock_alerts(token: Optional[str] = None) -> list[dict[str, Any]]:
     """GET /api/ai/stock-alerts veya client-side filtre için ürün listesi."""
-    r = requests.get(f"{API_PREFIX}/ai/stock-alerts", timeout=60)
+    r = requests.get(f"{API_PREFIX}/ai/stock-alerts", headers=_get_headers(token), timeout=60)
     if r.status_code == 404:
         return []
     if r.status_code >= 400:
