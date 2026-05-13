@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 import requests
 
-BASE_URL = os.environ.get("SYNTRA_API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+BASE_URL = os.environ.get("SYNTRA_API_BASE_URL", "http://127.0.0.1:8081").rstrip("/")
 API_PREFIX = f"{BASE_URL}/api"
 DEFAULT_TIMEOUT = 30
 
