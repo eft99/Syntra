@@ -58,6 +58,8 @@ services:
       - "8501:8501"
     env_file:
       - .env
+    environment:
+      SYNTRA_API_BASE_URL: http://api:8000
     depends_on:
       - api
     networks:

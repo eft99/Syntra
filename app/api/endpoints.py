@@ -13,6 +13,8 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models import Order, OrderItem, Product
 from app.schemas import (
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     NotificationRequest,
     OrderCreate,
     OrderRead,
@@ -24,6 +26,13 @@ from app.schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_REGISTERED_RESET_EMAILS = frozenset(
+    {
+        "admin@syntra.app",
+        "musteri@syntra.app",
+    }
+)
 
 ALLOWED_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -211,6 +220,17 @@ async def send_notification(data: NotificationRequest):
     from app.services.notification_service import dispatch
     await dispatch(channel=data.channel, title=data.title, message=data.message)
     return {"durum": "gönderildi", "kanal": data.channel, "baslik": data.title}
+
+
+@router.post(
+    "/auth/forgot-password",
+    response_model=ForgotPasswordResponse,
+    tags=["Auth"],
+)
+async def forgot_password(body: ForgotPasswordRequest) -> ForgotPasswordResponse:
+    """Kayıtlı e-posta için sıfırlama (demo; gerçek mail gönderilmez)."""
+    sent = body.email in _REGISTERED_RESET_EMAILS
+    return ForgotPasswordResponse(sent=sent)
 
 
 @router.get("/operations/summary", tags=["Operasyon"])

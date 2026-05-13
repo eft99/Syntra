@@ -1,11 +1,13 @@
 import logging
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.config import settings
-from app.database import engine, Base
-from app.api.endpoints import router
+
 from app.api.demo import router as demo_router
+from app.api.endpoints import router
+from app.config import settings
+from app.database import Base, engine
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,11 @@ tags_metadata = [
     },
     {
         "name": "Demo",
-        "description": "⚡ Jüri sunumu için hızlı veri yükleme ve sıfırlama araçları.",
+        "description": "Jüri sunumu için hızlı veri yükleme ve sıfırlama araçları.",
+    },
+    {
+        "name": "Auth",
+        "description": "Kimlik ve şifre sıfırlama (demo).",
     },
     {
         "name": "System",
@@ -64,6 +70,7 @@ app = FastAPI(
     ),
     version="1.0.0",
     lifespan=lifespan,
+    debug=settings.DEBUG,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_tags=tags_metadata,
@@ -72,7 +79,7 @@ app = FastAPI(
     },
 )
 
-origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",")]
+origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,

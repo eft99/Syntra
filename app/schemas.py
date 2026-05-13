@@ -1,7 +1,26 @@
 from datetime import datetime
-from typing import List, Optional
-from pydantic import BaseModel, Field, EmailStr, field_validator
 import re
+from typing import List, Optional
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Şifre sıfırlama talebi (demo; ileride DB ile genişletilir)."""
+
+    email: str = Field(..., min_length=3, max_length=254)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        e = v.strip().lower()
+        if "@" not in e or "." not in e.split("@", 1)[-1]:
+            raise ValueError("Geçerli bir e-posta girin.")
+        return e
+
+
+class ForgotPasswordResponse(BaseModel):
+    sent: bool
 
 
 class ProductBase(BaseModel):

@@ -1,0 +1,5 @@
+# Streamlit UI konteyneri (Dockerfile.frontend) — backend imajından ayrı, hafif bağımlılık seti
+streamlit==1.42.0
+requests==2.32.3
+pandas==2.2.3
+openpyxl==3.1.5
