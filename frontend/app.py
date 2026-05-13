@@ -21,6 +21,7 @@ def _init_session() -> None:
     st.session_state.setdefault("authenticated", False)
     st.session_state.setdefault("role", None)
     st.session_state.setdefault("username", "")
+    st.session_state.setdefault("access_token", None)
     st.session_state.setdefault("lang", "tr")
     st.session_state.setdefault("show_forgot_pw", False)
 
@@ -29,6 +30,7 @@ def _logout() -> None:
     st.session_state.authenticated = False
     st.session_state.role = None
     st.session_state.username = ""
+    st.session_state.access_token = None
     st.session_state.ai_messages = []
     st.session_state.parsed_records = None
     st.session_state.parse_warnings = []
@@ -83,14 +85,18 @@ def forgot_password_dialog() -> None:
 
 
 def _try_login(username: str, password: str, role_choice: str) -> tuple[bool, str]:
-    u = username.strip().lower()
-    p = password.strip()
-    if role_choice == t(st.session_state.lang, "role_admin"):
-        if u == "admin" and p == "admin123":
-            return True, "admin"
-    if role_choice == t(st.session_state.lang, "role_customer"):
-        if u == "user" and p == "user123":
+    try:
+        res = api_client.login(username.strip(), password.strip())
+        token = res.get("access_token")
+        if token:
+            st.session_state.access_token = token
+            # JWT payload can be decoded to get role, but for now we use backend response or fixed mapping
+            # Since our backend seeds 'admin' with 'admin' role:
+            if username.strip().lower() == "admin":
+                return True, "admin"
             return True, "customer"
+    except Exception as e:
+        st.error(f"Giriş hatası: {e}")
     return False, ""
 
 
@@ -174,6 +180,7 @@ def _render_header() -> None:
 def _render_main_tabs() -> None:
     lang = st.session_state.lang
     role = st.session_state.role
+    token = st.session_state.access_token
 
     if role == "admin":
         tab_ops, tab_inv, tab_ai, tab_notif = st.tabs(
@@ -185,13 +192,13 @@ def _render_main_tabs() -> None:
             ]
         )
         with tab_ops:
-            render_tab_operations(lang)
+            render_tab_operations(lang, token)
         with tab_inv:
-            render_tab_inventory(lang, role)
+            render_tab_inventory(lang, role, token)
         with tab_ai:
-            render_tab_ai(lang)
+            render_tab_ai(lang, token)
         with tab_notif:
-            render_tab_notifications(lang)
+            render_tab_notifications(lang, token)
     else:
         tab_ops, tab_ai, tab_notif = st.tabs(
             [
@@ -201,11 +208,11 @@ def _render_main_tabs() -> None:
             ]
         )
         with tab_ops:
-            render_tab_operations(lang)
+            render_tab_operations(lang, token)
         with tab_ai:
-            render_tab_ai(lang)
+            render_tab_ai(lang, token)
         with tab_notif:
-            render_tab_notifications(lang)
+            render_tab_notifications(lang, token)
 
 
 def main() -> None:
